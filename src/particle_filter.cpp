@@ -62,10 +62,6 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
    */
 
   std::default_random_engine gen;
-  normal_distribution<double> dist_x(x, std_pos[0]);
-  normal_distribution<double> dist_y(y, std_pos[1]);
-  normal_distribution<double> dist_theta(y, std_pos[2]);
-
   for(auto particle: particles){
     double x0 = particle.x;
     double y0 = particle.y;
@@ -74,7 +70,11 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
     double xf = x0 + velocity / yaw_rate * (sin(theta0 + yaw_rate * delta_t) - sin(theta0));
     double yf = y0 + velocity / yaw_rate * (cos(theta0) - cos(theta0 + yaw_rate * delta_t));
     double thetaf = theta0 + yaw_rate * delta_t;
-
+	
+    normal_distribution<double> dist_x(xf, std_pos[0]);
+    normal_distribution<double> dist_y(yf, std_pos[1]);
+    normal_distribution<double> dist_theta(thetaf, std_pos[2]);
+    
     particle.x = dist_x(gen);
     particle.y = dist_y(gen);
     particle.theta = dist_theta(gen);
