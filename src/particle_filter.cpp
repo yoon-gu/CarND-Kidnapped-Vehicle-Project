@@ -80,7 +80,7 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
    */
 
   std::default_random_engine gen;
-  for(auto particle: particles){
+  for(auto &particle: particles){
     double x0 = particle.x;
     double y0 = particle.y;
     double theta0 = particle.theta;
@@ -130,7 +130,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
    */
 
   double weight_total = 0.0;
-  for( auto p : particles){
+  for( auto &p : particles){
     double x_part = p.x;
     double y_part = p.y;
     double theta = p.theta;
@@ -149,15 +149,15 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
         int min_id = -1;
         double min_dist = -1;
         for(auto& lm : map_landmarks.landmark_list) {
-            double distance = dist(lm.x, lm.y, x_map, y_map);
+            double distance = dist(lm.x_f, lm.y_f, x_map, y_map);
             if (min_id == -1 || min_dist > distance ) {
                 min_dist = distance;
-                min_id = ob.id;
+                min_id = obs.id;
             }
         }
         nearest.id = min_id;
-        nearest.x = landmark_list[min_id].x;
-        nearest.y = landmark_list[min_id].y;
+        nearest.x = map_landmarks.landmark_list[min_id].x_f;
+        nearest.y = map_landmarks.landmark_list[min_id].y_f;
 
         // 3. Weight
         w *= multiv_prob(std_landmark[0], std_landmark[1], x_obs, y_obs, nearest.x, nearest.y);
@@ -168,8 +168,8 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 
   for (int i = 0 ; i < particles.size(); i++) {
     double w = particles[i].weight;
-    particles[i].weight = particles[i].weight / total_weight;
-    weights[i] = particles[i].weight / total_weight;
+    particles[i].weight = particles[i].weight / weight_total;
+    weights[i] = particles[i].weight / weight_total;
   }
 }
 
@@ -180,8 +180,8 @@ void ParticleFilter::resample() {
    * NOTE: You may find std::discrete_distribution helpful here.
    *   http://en.cppreference.com/w/cpp/numeric/random/discrete_distribution
    */
-  default_random_engine gen;
-  discrete_distribution<> dist(weights.begin(), weights.end());
+  std::default_random_engine gen;
+  std::discrete_distribution<> dist(weights.begin(), weights.end());
 
   std::vector<Particle> resampled;
   for (int i = 0; i < particles.size(); ++i)
