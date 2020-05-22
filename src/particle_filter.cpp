@@ -65,7 +65,7 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
     particle.weight = 1.0;
 
     particles.push_back(particle);
-    weights.push_back(p.weight);
+    weights.push_back(particle.weight);
   }
 
   is_initialized = true;
@@ -87,9 +87,16 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
     double y0 = particle.y;
     double theta0 = particle.theta;
 
+
     double xf = x0 + velocity / yaw_rate * (sin(theta0 + yaw_rate * delta_t) - sin(theta0));
     double yf = y0 + velocity / yaw_rate * (cos(theta0) - cos(theta0 + yaw_rate * delta_t));
     double thetaf = theta0 + yaw_rate * delta_t;
+
+    if (fabs(yaw_rate) < 0.0001)
+    {
+        xf = x0 + velocity * delta_t * cos(theta0);
+        yf = y0 + velocity * delta_t * sin(theta0);
+    }
 
     normal_distribution<double> dist_x(xf, std_pos[0]);
     normal_distribution<double> dist_y(yf, std_pos[1]);
@@ -132,24 +139,24 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 
   double weight_total = 0.0;
   for( auto &p : particles){
-    double x_part = p.x;
-    double y_part = p.y;
-    double theta = p.theta;
+    double p_x = p.x;
+    double p_y = p.y;
+    double p_theta = p.theta;
 
     vector<Map::single_landmark_s> in_range_landmarks;
     in_range_landmarks.clear();
     for (auto& landmark : map_landmarks.landmark_list)
-        if (sensor_range >= dist(x_part, y_part, landmark.x_f, landmark.y_f))
+        if (sensor_range >= dist(p_x, p_y, landmark.x_f, landmark.y_f))
             in_range_landmarks.push_back(landmark);
 
     double w = 1.0;
-    for ( auto obs : observations ){
+    for ( auto &obs : observations ){
         double x_obs = obs.x;
         double y_obs = obs.y;
 
         // 1. Coordinate Coversion
-        double x_map = x_part + (cos(theta) * x_obs) - (sin(theta) * y_obs);
-        double y_map = y_part + (sin(theta) * x_obs) + (cos(theta) * y_obs);
+        double x_map = p_x + (cos(p_theta) * x_obs) - (sin(p_theta) * y_obs);
+        double y_map = p_y + (sin(p_theta) * x_obs) + (cos(p_theta) * y_obs);
 
         // 2. Sorting
         LandmarkObs nearest;
@@ -159,24 +166,27 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
             double distance = dist(lm.x_f, lm.y_f, x_map, y_map);
             if (min_id == -1 || min_dist > distance ) {
                 min_dist = distance;
-                min_id = obs.id;
+                min_id = lm.id_i;
             }
         }
         nearest.id = min_id;
-        nearest.x = map_landmarks.landmark_list[min_id].x_f;
-        nearest.y = map_landmarks.landmark_list[min_id].y_f;
+        nearest.x = x_map;
+        nearest.y = y_map;
 
         // 3. Weight
-        w *= multiv_prob(std_landmark[0], std_landmark[1], x_obs, y_obs, nearest.x, nearest.y);
+        w *= multiv_prob(std_landmark[0], std_landmark[1],
+                         x_map, y_map,
+                         map_landmarks.landmark_list[min_id-1].x_f, map_landmarks.landmark_list[min_id-1].y_f);
     }
     p.weight = w;
-    weight_total += w;
+    weight_total += p.weight;
   }
 
   for (int i = 0 ; i < particles.size(); i++) {
     double w = particles[i].weight;
-    particles[i].weight = particles[i].weight / weight_total;
-    weights[i] = particles[i].weight / weight_total;
+    double n_w = particles[i].weight / weight_total;
+    particles[i].weight = n_w;
+    weights[i] = n_w;
   }
 }
 
