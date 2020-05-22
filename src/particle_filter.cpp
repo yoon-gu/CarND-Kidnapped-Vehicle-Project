@@ -65,6 +65,7 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
     particle.weight = 1.0;
 
     particles.push_back(particle);
+    weights.push_back(p.weight);
   }
 
   is_initialized = true;
@@ -97,7 +98,6 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
     particle.x = dist_x(gen);
     particle.y = dist_y(gen);
     particle.theta = dist_theta(gen);
-    weights.push_back(particle.weight);
   }
 }
 
@@ -135,6 +135,12 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
     double x_part = p.x;
     double y_part = p.y;
     double theta = p.theta;
+
+    vector<Map::single_landmark_s> in_range_landmarks;
+    in_range_landmarks.clear();
+    for (auto& landmark : map_landmarks.landmark_list)
+        if (sensor_range >= dist(x_part, y_part, landmark.x_f, landmark.y_f))
+            in_range_landmarks.push_back(landmark);
 
     double w = 1.0;
     for ( auto obs : observations ){
