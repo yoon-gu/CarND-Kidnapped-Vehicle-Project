@@ -22,6 +22,24 @@ using std::string;
 using std::vector;
 using std::normal_distribution;
 
+double multiv_prob(double sig_x, double sig_y, double x_obs, double y_obs,
+                   double mu_x, double mu_y) {
+  // calculate normalization term
+  double gauss_norm;
+  gauss_norm = 1 / (2 * M_PI * sig_x * sig_y);
+
+  // calculate exponent
+  double exponent;
+  exponent = (pow(x_obs - mu_x, 2) / (2 * pow(sig_x, 2)))
+               + (pow(y_obs - mu_y, 2) / (2 * pow(sig_y, 2)));
+
+  // calculate weight using normalization terms and exponent
+  double weight;
+  weight = gauss_norm * exp(-exponent);
+
+  return weight;
+}
+
 void ParticleFilter::init(double x, double y, double theta, double std[]) {
   /**
    * TODO: Set the number of particles. Initialize all particles to
@@ -70,14 +88,15 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
     double xf = x0 + velocity / yaw_rate * (sin(theta0 + yaw_rate * delta_t) - sin(theta0));
     double yf = y0 + velocity / yaw_rate * (cos(theta0) - cos(theta0 + yaw_rate * delta_t));
     double thetaf = theta0 + yaw_rate * delta_t;
-	
+
     normal_distribution<double> dist_x(xf, std_pos[0]);
     normal_distribution<double> dist_y(yf, std_pos[1]);
     normal_distribution<double> dist_theta(thetaf, std_pos[2]);
-    
+
     particle.x = dist_x(gen);
     particle.y = dist_y(gen);
     particle.theta = dist_theta(gen);
+    weights.push_back(particle.weight);
   }
 }
 
@@ -91,7 +110,6 @@ void ParticleFilter::dataAssociation(vector<LandmarkObs> predicted,
    *   probably find it useful to implement this method and use it as a helper
    *   during the updateWeights phase.
    */
-
 }
 
 void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
@@ -111,6 +129,48 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
    *   (look at equation 3.33) http://planning.cs.uiuc.edu/node99.html
    */
 
+  double weight_total = 0.0;
+  for( auto p : particles){
+    double x_part = p.x;
+    double y_part = p.y;
+    double theta = p.theta;
+
+    double w = 1.0;
+    for ( auto obs : observations ){
+        double x_obs = obs.x;
+        double y_obs = obs.y;
+
+        // 1. Coordinate Coversion
+        double x_map = x_part + (cos(theta) * x_obs) - (sin(theta) * y_obs);
+        double y_map = y_part + (sin(theta) * x_obs) + (cos(theta) * y_obs);
+
+        // 2. Sorting
+        LandmarkObs nearest;
+        int min_id = -1;
+        double min_dist = -1;
+        for(auto& lm : map_landmarks.landmark_list) {
+            double distance = dist(lm.x, lm.y, x_map, y_map);
+            if (min_id == -1 || min_dist > distance ) {
+                min_dist = distance;
+                min_id = ob.id;
+            }
+        }
+        nearest.id = min_id;
+        nearest.x = landmark_list[min_id].x;
+        nearest.y = landmark_list[min_id].y;
+
+        // 3. Weight
+        w *= multiv_prob(std_landmark[0], std_landmark[1], x_obs, y_obs, nearest.x, nearest.y);
+    }
+    p.weight = w;
+    weight_total += w;
+  }
+
+  for (int i = 0 ; i < particles.size(); i++) {
+    double w = particles[i].weight;
+    particles[i].weight = particles[i].weight / total_weight;
+    weights[i] = particles[i].weight / total_weight;
+  }
 }
 
 void ParticleFilter::resample() {
@@ -120,6 +180,14 @@ void ParticleFilter::resample() {
    * NOTE: You may find std::discrete_distribution helpful here.
    *   http://en.cppreference.com/w/cpp/numeric/random/discrete_distribution
    */
+  default_random_engine gen;
+  discrete_distribution<> dist(weights.begin(), weights.end());
+
+  std::vector<Particle> resampled;
+  for (int i = 0; i < particles.size(); ++i)
+    resampled.push_back(particles[dist(gen)]);
+
+  particles = resampled;
 
 }
 
